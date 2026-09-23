@@ -34,6 +34,12 @@ validation:
   bootstrap_samples: 2000
   minimum_shift_seconds: 1.5
   local_block_seconds: 60.0
+  cardiac_permutations: 2000
+cardiac:
+  bandpass: [5.0, 25.0]
+  peak_mad_scale: 4.0
+  refractory_seconds: 0.25
+  lag_seconds: 0.2
 recovery:
   minimum_rank_correlation: 0.5
   coverage_range: [0.6, 0.99]
