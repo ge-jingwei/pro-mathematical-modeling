@@ -1,4 +1,4 @@
-from dataclasses import asdict
+from dataclasses import asdict, replace
 
 import numpy as np
 import pandas as pd
@@ -11,6 +11,7 @@ from sklearn.model_selection import KFold, StratifiedGroupKFold
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from scipy.special import ndtr
+from scipy.stats import ttest_rel
 from Ques1.statistics import cluster_sign_test
 
 from Ques2.model import ModelParameters, simulate, vary
@@ -87,7 +88,7 @@ def _lovo_mean(epochs: np.ndarray, fraction: float) -> np.ndarray:
     return epochs[np.argsort(distance)[:keep]].mean(axis=0)
 
 
-def observation_cross_validation(dataset, model: dict, rate: float, folds: int = 5, maximum: int = 160, alpha: float = 0.1, lovo_fraction: float | None = None) -> pd.DataFrame:
+def observation_cross_validation_folds(dataset, model: dict, rate: float, folds: int = 5, maximum: int = 160, alpha: float = 0.1, lovo_fraction: float | None = None) -> pd.DataFrame:
     splits = {}
     for task in (1, 2):
         for side in (-1, 1):
@@ -106,8 +107,26 @@ def observation_cross_validation(dataset, model: dict, rate: float, folds: int =
         window, _, _ = lateral_window(prediction, dataset.times)
         for task in (1, 2):
             rows.append({"task": task, "fold": fold + 1, **validation_metrics(prediction, test, dataset.times, task, rate), "sign_agreement": sign_agreement(prediction, test, dataset.times, task, window)})
-    frame = pd.DataFrame(rows)
+    return pd.DataFrame(rows)
+
+
+def aggregate_validation(frame: pd.DataFrame) -> pd.DataFrame:
     return frame.groupby("task", as_index=False).agg(waveform_correlation=("waveform_correlation", "mean"), waveform_correlation_sd=("waveform_correlation", "std"), spectral_cosine=("spectral_cosine", "mean"), spectral_cosine_sd=("spectral_cosine", "std"), sign_agreement=("sign_agreement", "mean"))
+
+
+def observation_cross_validation(dataset, model: dict, rate: float, folds: int = 5, maximum: int = 160, alpha: float = 0.1, lovo_fraction: float | None = None) -> pd.DataFrame:
+    return aggregate_validation(observation_cross_validation_folds(dataset, model, rate, folds, maximum, alpha, lovo_fraction))
+
+
+def sham_paired_tests(real: pd.DataFrame, shams: dict, task: int = 2) -> pd.DataFrame:
+    rows = []
+    for name, frame in shams.items():
+        reference = real.query("task == @task").sort_values("fold")
+        compare = frame.query("task == @task").sort_values("fold")
+        difference = reference["waveform_correlation"].to_numpy() - compare["waveform_correlation"].to_numpy()
+        statistic, probability = ttest_rel(reference["waveform_correlation"], compare["waveform_correlation"])
+        rows.append({"model": name, "mean_difference": float(difference.mean()), "difference_sd": float(difference.std(ddof=1)), "t_statistic": float(statistic), "p_value": float(probability), "folds": len(difference)})
+    return pd.DataFrame(rows)
 
 
 def lateral_window(prediction: dict, times: np.ndarray) -> tuple[np.ndarray, float, float]:
@@ -129,21 +148,20 @@ def sign_agreement(prediction: dict, erp: dict, times: np.ndarray, task: int, ma
 
 def calibrate(erp: dict, times: np.ndarray, rate: float, config: dict) -> tuple[ModelParameters, dict, np.ndarray, pd.DataFrame]:
     rows = []
-    best = None
     grid = config["q2"]["calibration"]
     for delay in grid["delay"]:
         for coupling in grid["coupling"]:
             for input_gain in grid["input_gain"]:
                 parameters = ModelParameters(delay=float(delay), coupling=float(coupling), input_gain=float(input_gain))
                 model = {side: simulate(side, times, rate, parameters, config["q2"]["grid_size"]) for side in (-1, 1)}
-                scales = _scales(model, erp, times, 1)
-                prediction = calibrated_prediction(model, scales)
-                metrics = validation_metrics(prediction, erp, times, 1, rate)
-                row = {"delay_ms": delay * 1000, "coupling": coupling, "input_gain": input_gain, **metrics}
-                rows.append(row)
-                if best is None or metrics["waveform_correlation"] > best[0]:
-                    best = (metrics["waveform_correlation"], parameters, model, scales)
-    return best[1], best[2], best[3], pd.DataFrame(rows)
+                metrics = validation_metrics(calibrated_prediction(model, _scales(model, erp, times, 1)), erp, times, 1, rate)
+                rows.append({"delay_ms": delay * 1000, "coupling": coupling, "input_gain": input_gain, **metrics})
+    frame = pd.DataFrame(rows)
+    near = frame[frame["waveform_correlation"] >= frame["waveform_correlation"].max() - float(grid["tolerance"])]
+    chosen = near.sort_values(["delay_ms", "coupling", "input_gain"]).iloc[0]
+    parameters = ModelParameters(delay=float(chosen.delay_ms) / 1000.0, coupling=float(chosen.coupling), input_gain=float(chosen.input_gain))
+    model = {side: simulate(side, times, rate, parameters, config["q2"]["grid_size"]) for side in (-1, 1)}
+    return parameters, model, _scales(model, erp, times, 1), frame
 
 
 def sensitivity(parameters: ModelParameters, kernels: list[dict], erp: dict, times: np.ndarray, rate: float, config: dict, maximum: int = 160) -> pd.DataFrame:
@@ -159,30 +177,42 @@ def sensitivity(parameters: ModelParameters, kernels: list[dict], erp: dict, tim
     return pd.DataFrame(rows)
 
 
+def _lateralization_metrics(model: dict) -> dict:
+    midline = max(np.max(np.abs(model[side].eeg[0])) for side in (-1, 1))
+    midline = max(float(midline), np.finfo(float).eps)
+    contrast = (model[1].eeg[2] - model[1].eeg[1]) - (model[-1].eeg[2] - model[-1].eeg[1])
+    peak = int(np.argmax(np.abs(contrast)))
+    swapped = np.vstack([model[-1].eeg[0], model[-1].eeg[2], model[-1].eeg[1]])
+    return {
+        "condition_contrast_peak": float(np.max(np.abs(contrast))),
+        "contrast_to_fz": float(np.max(np.abs(contrast)) / midline),
+        "mirror_residual": float(np.max(np.abs(model[1].eeg - swapped))),
+        "mirror_residual_to_fz": float(np.max(np.abs(model[1].eeg - swapped)) / midline),
+        "fz_condition_to_fz": float(np.max(np.abs(model[1].eeg[0] - model[-1].eeg[0])) / midline),
+        "lateralization_sign": int(np.sign(contrast[peak])),
+        "fz_peak": midline,
+    }
+
+
 def model_diagnostics(parameters: ModelParameters, times: np.ndarray, rate: float, grid_size: int) -> tuple[pd.DataFrame, pd.DataFrame]:
-    ratio_rows = []
-    for side in (-1, 1):
-        for mode in ("collapsed", "shape"):
-            item = simulate(side, times, rate, parameters, grid_size, drive_mode=mode)
-            peak = np.max(np.abs(item.eeg[2] - item.eeg[1]))
-            midline = np.max(np.abs(item.eeg[0]))
-            ratio_rows.append({"side": side, "projection": mode, "f4_minus_f3_peak": peak, "fz_peak": midline, "side_lobe_ratio": peak / max(midline, np.finfo(float).eps)})
-    return pd.DataFrame(ratio_rows), geometry_sensitivity(parameters, times, rate, grid_size)
+    rows = []
+    for mode in ("collapsed", "shape"):
+        model = {side: simulate(side, times, rate, parameters, grid_size, drive_mode=mode) for side in (-1, 1)}
+        rows.append({"projection": mode, **_lateralization_metrics(model)})
+    return pd.DataFrame(rows), geometry_sensitivity(parameters, times, rate, grid_size)
 
 
 def geometry_sensitivity(parameters: ModelParameters, times: np.ndarray, rate: float, grid_size: int) -> pd.DataFrame:
     rows = []
-    for shift in (-0.2, 0.2):
-        shifted = {side: simulate(side, times, rate, parameters, grid_size, geometry_shift=shift) for side in (-1, 1)}
-        prediction = {side: shifted[side].eeg for side in (-1, 1)}
-        mask, _, _ = lateral_window(prediction, times)
-        contrast = (prediction[1][2, mask] - prediction[1][1, mask]) - (prediction[-1][2, mask] - prediction[-1][1, mask])
-        rows.append({"geometry_shift": shift, "side_lobe_ratio": float(np.max(np.abs(prediction[1][2] - prediction[1][1])) / max(np.max(np.abs(prediction[1][0])), np.finfo(float).eps)), "lateralization_sign": int(np.sign(np.mean(contrast)))})
+    for shift in (0.0, -0.2, 0.2):
+        model = {side: simulate(side, times, rate, parameters, grid_size, geometry_shift=shift) for side in (-1, 1)}
+        rows.append({"geometry_shift": shift, "projection": "shape", **_lateralization_metrics(model)})
     return pd.DataFrame(rows)
 
 
-def group_level_tests(dataset, permutations: int, rng: np.random.Generator) -> pd.DataFrame:
+def group_level_tests(dataset, permutations: int, rng: np.random.Generator) -> tuple[pd.DataFrame, dict]:
     rows = []
+    windows = {}
     for lock, epochs, labels, tasks, groups in (("cue", dataset.epochs, dataset.labels, dataset.tasks, dataset.groups), ("target", dataset.target_epochs, dataset.target_labels, dataset.target_tasks, dataset.target_groups)):
         time_mask = (dataset.times >= 0) & (dataset.times <= 0.6)
         times = dataset.times[time_mask]
@@ -219,10 +249,23 @@ def group_level_tests(dataset, permutations: int, rng: np.random.Generator) -> p
                     values.append(signal[time_mask])
                 if len(values) >= 2:
                     clusters = cluster_sign_test(np.asarray(values), permutations, rng, alpha=0.05 / 24)
+                    if clusters:
+                        windows[(lock, task, feature)] = [(int(a), int(b), float(p)) for a, b, p in clusters]
                     rows.append({"lock": lock, "task": task, "feature": feature, "n_groups": len(values), "significant_clusters": len(clusters), "clusters": ";".join(f"{times[a]:.3f}-{times[b-1]:.3f}:p={p:.4f}" for a, b, p in clusters), "max_abs_d": float(np.nanmax(np.abs(np.mean(values, axis=0)) / np.maximum(np.std(values, axis=0, ddof=1), 1e-9)))})
                 else:
                     rows.append({"lock": lock, "task": task, "feature": feature, "n_groups": len(values), "significant_clusters": 0, "clusters": "insufficient groups", "max_abs_d": np.nan})
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows), windows
+
+
+def lateral_feature_gate(dataset, windows: dict) -> np.ndarray:
+    index = np.flatnonzero((dataset.times >= 0) & (dataset.times <= 0.6))
+    gate = np.zeros(len(dataset.times), dtype=bool)
+    for (lock, _task, feature), clusters in windows.items():
+        if lock != "cue" or feature not in {"F4-F3", "normalized_F4-F3"}:
+            continue
+        for start, stop, _p in clusters:
+            gate[index[start:stop]] = True
+    return gate
 
 
 def positive_controls(dataset, permutations: int, rng: np.random.Generator) -> pd.DataFrame:
@@ -230,9 +273,23 @@ def positive_controls(dataset, permutations: int, rng: np.random.Generator) -> p
     cue_features = dataset.epochs[:, :, mask].mean(axis=2)
     task_result = classify(cue_features, (dataset.tasks == 2).astype(int), dataset.subjects, permutations, rng)[0]
     target = dataset.target_tasks == 1
-    target_features = dataset.target_epochs[target, :, mask].mean(axis=2)
+    target_features = dataset.target_epochs[target][:, :, mask].mean(axis=2)
     location_result = classify(target_features, (dataset.target_labels[target] == 1).astype(int), dataset.target_subjects[target], permutations, rng)[0]
     return pd.DataFrame([{ "control": "task1_vs_task2", **task_result }, { "control": "task1_target_position", **location_result }])
+
+
+def injection_control(dataset, prediction: dict, window: np.ndarray, amplitudes: tuple[float, ...], permutations: int, rng: np.random.Generator) -> pd.DataFrame:
+    mask = (dataset.times >= 0.10) & (dataset.times <= 0.30)
+    profile = np.hanning(int(mask.sum()))
+    scale = float(np.sqrt(np.mean(dataset.epochs[:, 1:3] ** 2)))
+    rows = []
+    for amplitude in amplitudes:
+        epochs = dataset.epochs.copy()
+        epochs[:, 2, mask] += amplitude * scale * profile * dataset.labels[:, None]
+        epochs[:, 1, mask] -= amplitude * scale * profile * dataset.labels[:, None]
+        features, _ = feature_matrix(replace(dataset, epochs=epochs), prediction, window)
+        rows.append({"injected_amplitude_rms": amplitude, **classify(features, dataset.labels, dataset.groups, permutations, rng)[0]})
+    return pd.DataFrame(rows)
 
 
 def decodability_bounds(dataset) -> pd.DataFrame:

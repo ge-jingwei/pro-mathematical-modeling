@@ -180,3 +180,46 @@ def plot_classifier(results: dict, output: Path) -> None:
     _labels(axes)
     _save(fig, axes, output / "fig2-7_classifier")
     plt.close(fig)
+
+
+def plot_controls(sham, injection, bounds, group_tests, real_correlation: float, real_auc: float, output: Path) -> None:
+    fig, axes = plt.subplots(1, 4, figsize=(7.2, 2.4), constrained_layout=True)
+    names = []
+    values = []
+    errors = []
+    colors = []
+    for kernel, color in (("loose", "#BFBFBF"), ("tight", BLUE)):
+        subset = sham[sham["kernel"] == kernel]
+        for row in subset.itertuples():
+            names.append(f"{kernel}\n{row.model}")
+            values.append(row.waveform_correlation)
+            errors.append(row.waveform_correlation_sd)
+            colors.append(color)
+    axes[0].bar(range(len(values)), values, yerr=errors, color=colors, width=0.6)
+    axes[0].axhline(real_correlation, color=RED, linestyle="--", linewidth=1.0)
+    axes[0].set(xticks=range(len(names)), xticklabels=names, ylabel="Held-out correlation", ylim=(0, 1.05))
+    axes[0].set_title("Real model (red line) vs shams", fontsize=7)
+    axes[0].tick_params(axis="x", labelsize=5)
+
+    axes[1].plot(injection["injected_amplitude_rms"], injection["auc"], marker="o", color=TEAL, markersize=3)
+    axes[1].axhline(0.70, color=GRAY, linestyle="--", linewidth=0.8)
+    axes[1].axhline(real_auc, color=RED, linestyle=":", linewidth=1.0)
+    axes[1].set(xlabel="Injected lateral amplitude (RMS units)", ylabel="Cross-file AUC", ylim=(0.3, 1.0))
+    axes[1].set_title("Injection sensitivity", fontsize=7)
+
+    for (lock, task), color, style in zip(sorted({(row.lock, row.task) for row in bounds.itertuples()}), (BLUE, RED, TEAL, GOLD), ("-", "--", "-.", ":")):
+        subset = bounds[(bounds["lock"] == lock) & (bounds["task"] == task)]
+        axes[2].plot(subset["window_start_s"] + 0.05, subset["auc_upper_bound"], marker="o", markersize=2.5, color=color, linestyle=style, label=f"{lock} T{task}")
+    axes[2].axhline(0.60, color=GRAY, linestyle="--", linewidth=0.8)
+    axes[2].set(xlabel="Window centre (s)", ylabel="AUC upper bound", ylim=(0.5, 0.7))
+    axes[2].set_title("Decodability bound", fontsize=7)
+    axes[2].legend(fontsize=5, ncol=2)
+
+    order = group_tests.reset_index(drop=True)
+    axes[3].bar(range(len(order)), order["max_abs_d"], color=[RED if value else "#BFBFBF" for value in order["significant_clusters"]], width=0.7)
+    axes[3].set(xticks=range(len(order)), ylabel="Max |Cohen d|")
+    axes[3].set_xticklabels([f"{row.lock[0]}{int(row.task)}" for row in order.itertuples()], fontsize=5, rotation=90)
+    axes[3].set_title("Group-level lateral tests", fontsize=7)
+    _labels(axes)
+    _save(fig, axes, output / "fig2-8_controls")
+    plt.close(fig)
