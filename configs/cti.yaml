@@ -2,6 +2,7 @@ random_seed: 20260923
 paths:
   data_dir: C题/dataset
   q1_output_dir: outputs/q1
+  q2_output_dir: outputs/q2
 sample_rate: 256
 channels:
   eeg: [Fz, F3, F4]
@@ -29,3 +30,10 @@ statistics:
   bootstrap_samples: 1000
   cluster_permutations: 1000
   label_permutations: 5000
+q2:
+  grid_size: 16
+  classifier_permutations: 200
+  calibration:
+    delay: [0.04, 0.05, 0.06, 0.07]
+    coupling: [0.8, 1.2, 1.6]
+    input_gain: [4.0, 5.0, 6.0]
