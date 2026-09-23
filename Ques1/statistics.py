@@ -16,7 +16,7 @@ def _clusters(statistic: np.ndarray, threshold: float) -> list[np.ndarray]:
     return [np.arange(a, b) for a, b in edges.reshape(-1, 2)]
 
 
-def cluster_sign_test(data: np.ndarray, permutations: int, rng: np.random.Generator) -> list[tuple[int, int, float]]:
+def cluster_sign_test(data: np.ndarray, permutations: int, rng: np.random.Generator, alpha: float = 0.05) -> list[tuple[int, int, float]]:
     n = len(data)
     std = data.std(axis=0, ddof=1)
     observed = np.divide(data.mean(axis=0), std / np.sqrt(n), out=np.zeros(data.shape[1]), where=std > 0)
@@ -33,7 +33,7 @@ def cluster_sign_test(data: np.ndarray, permutations: int, rng: np.random.Genera
     for cluster in clusters:
         mass = float(np.abs(observed[cluster]).sum())
         p = (1.0 + np.sum(maxima >= mass)) / (permutations + 1.0)
-        if p < 0.05:
+        if p < alpha:
             result.append((int(cluster[0]), int(cluster[-1] + 1), float(p)))
     return result
 

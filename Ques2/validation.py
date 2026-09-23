@@ -3,12 +3,15 @@ from dataclasses import asdict
 import numpy as np
 import pandas as pd
 from scipy.signal import welch
+from scipy.signal import butter, hilbert, sosfiltfilt
 from sklearn.linear_model import LogisticRegression
 from sklearn.linear_model import Ridge
 from sklearn.metrics import accuracy_score, roc_auc_score, roc_curve
 from sklearn.model_selection import KFold, StratifiedGroupKFold
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
+from scipy.special import ndtr
+from Ques1.statistics import cluster_sign_test
 
 from Ques2.model import ModelParameters, simulate, vary
 
@@ -36,25 +39,25 @@ def _lag_design(signal: np.ndarray, maximum: int = 160, step: int = 4) -> np.nda
     return np.column_stack(columns)
 
 
-def fit_observation_kernel(model: dict, reference: dict, times: np.ndarray) -> tuple[dict, list[dict]]:
+def fit_observation_kernel(model: dict, reference: dict, times: np.ndarray, maximum: int = 160, alpha: float = 0.1) -> tuple[dict, list[dict]]:
     mask = (times >= 0) & (times <= 0.75)
     kernels = []
     for channel in range(3):
-        design = np.vstack([_lag_design(model[side].eeg[channel])[mask] for task in (1, 2) for side in (-1, 1)])
+        design = np.vstack([_lag_design(model[side].eeg[channel], maximum)[mask] for task in (1, 2) for side in (-1, 1)])
         target = np.concatenate([reference[(task, side)]["mean"][channel, mask] for task in (1, 2) for side in (-1, 1)])
         scale = np.linalg.norm(design, axis=0)
         scale[scale == 0] = 1.0
-        fitted = Ridge(alpha=0.1).fit(design / scale, target)
+        fitted = Ridge(alpha=alpha).fit(design / scale, target)
         kernels.append({"coef": fitted.coef_, "intercept": fitted.intercept_, "scale": scale})
-    return apply_observation_kernel(model, kernels, times), kernels
+    return apply_observation_kernel(model, kernels, times, maximum), kernels
 
 
-def apply_observation_kernel(model: dict, kernels: list[dict], times: np.ndarray) -> dict:
+def apply_observation_kernel(model: dict, kernels: list[dict], times: np.ndarray, maximum: int = 160) -> dict:
     result = {}
     for side in (-1, 1):
         channels = []
         for channel, kernel in enumerate(kernels):
-            design = _lag_design(model[side].eeg[channel]) / kernel["scale"]
+            design = _lag_design(model[side].eeg[channel], maximum) / kernel["scale"]
             channels.append(design @ kernel["coef"] + kernel["intercept"])
         values = np.asarray(channels)
         values -= values[:, times < 0].mean(axis=1, keepdims=True)
@@ -77,7 +80,14 @@ def validation_metrics(prediction: dict, erp: dict, times: np.ndarray, task: int
     return {"waveform_correlation": float(np.nanmean(correlations)), "spectral_cosine": float(np.nanmean(spectra))}
 
 
-def observation_cross_validation(dataset, model: dict, rate: float, folds: int = 5) -> pd.DataFrame:
+def _lovo_mean(epochs: np.ndarray, fraction: float) -> np.ndarray:
+    center = np.median(epochs, axis=0)
+    distance = np.linalg.norm((epochs - center).reshape(len(epochs), -1), axis=1)
+    keep = max(2, int(np.ceil(len(epochs) * fraction)))
+    return epochs[np.argsort(distance)[:keep]].mean(axis=0)
+
+
+def observation_cross_validation(dataset, model: dict, rate: float, folds: int = 5, maximum: int = 160, alpha: float = 0.1, lovo_fraction: float | None = None) -> pd.DataFrame:
     splits = {}
     for task in (1, 2):
         for side in (-1, 1):
@@ -89,9 +99,10 @@ def observation_cross_validation(dataset, model: dict, rate: float, folds: int =
         test = {}
         for key, values in splits.items():
             train_indices, test_indices = values[fold]
-            train[key] = {"mean": dataset.epochs[train_indices].mean(axis=0)}
+            epochs = dataset.epochs[train_indices]
+            train[key] = {"mean": _lovo_mean(epochs, lovo_fraction) if lovo_fraction else epochs.mean(axis=0)}
             test[key] = {"mean": dataset.epochs[test_indices].mean(axis=0)}
-        prediction, _ = fit_observation_kernel(model, train, dataset.times)
+        prediction, _ = fit_observation_kernel(model, train, dataset.times, maximum, alpha)
         window, _, _ = lateral_window(prediction, dataset.times)
         for task in (1, 2):
             rows.append({"task": task, "fold": fold + 1, **validation_metrics(prediction, test, dataset.times, task, rate), "sign_agreement": sign_agreement(prediction, test, dataset.times, task, window)})
@@ -135,16 +146,109 @@ def calibrate(erp: dict, times: np.ndarray, rate: float, config: dict) -> tuple[
     return best[1], best[2], best[3], pd.DataFrame(rows)
 
 
-def sensitivity(parameters: ModelParameters, kernels: list[dict], erp: dict, times: np.ndarray, rate: float, config: dict) -> pd.DataFrame:
+def sensitivity(parameters: ModelParameters, kernels: list[dict], erp: dict, times: np.ndarray, rate: float, config: dict, maximum: int = 160) -> pd.DataFrame:
     rows = []
     for name in ("delay", "coupling", "input_gain", "tau_e", "tau_i"):
         for factor in (0.8, 1.2):
             current = vary(parameters, name, factor)
             model = {side: simulate(side, times, rate, current, config["q2"]["grid_size"]) for side in (-1, 1)}
-            prediction = apply_observation_kernel(model, kernels, times)
+            prediction = apply_observation_kernel(model, kernels, times, maximum)
             metrics = validation_metrics(prediction, erp, times, 2, rate)
             mask, _, _ = lateral_window(prediction, times)
             rows.append({"parameter": name, "factor": factor, "value": getattr(current, name), **metrics, "sign_agreement": sign_agreement(prediction, erp, times, 2, mask)})
+    return pd.DataFrame(rows)
+
+
+def model_diagnostics(parameters: ModelParameters, times: np.ndarray, rate: float, grid_size: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+    ratio_rows = []
+    for side in (-1, 1):
+        for mode in ("collapsed", "shape"):
+            item = simulate(side, times, rate, parameters, grid_size, drive_mode=mode)
+            peak = np.max(np.abs(item.eeg[2] - item.eeg[1]))
+            midline = np.max(np.abs(item.eeg[0]))
+            ratio_rows.append({"side": side, "projection": mode, "f4_minus_f3_peak": peak, "fz_peak": midline, "side_lobe_ratio": peak / max(midline, np.finfo(float).eps)})
+    return pd.DataFrame(ratio_rows), geometry_sensitivity(parameters, times, rate, grid_size)
+
+
+def geometry_sensitivity(parameters: ModelParameters, times: np.ndarray, rate: float, grid_size: int) -> pd.DataFrame:
+    rows = []
+    for shift in (-0.2, 0.2):
+        shifted = {side: simulate(side, times, rate, parameters, grid_size, geometry_shift=shift) for side in (-1, 1)}
+        prediction = {side: shifted[side].eeg for side in (-1, 1)}
+        mask, _, _ = lateral_window(prediction, times)
+        contrast = (prediction[1][2, mask] - prediction[1][1, mask]) - (prediction[-1][2, mask] - prediction[-1][1, mask])
+        rows.append({"geometry_shift": shift, "side_lobe_ratio": float(np.max(np.abs(prediction[1][2] - prediction[1][1])) / max(np.max(np.abs(prediction[1][0])), np.finfo(float).eps)), "lateralization_sign": int(np.sign(np.mean(contrast)))})
+    return pd.DataFrame(rows)
+
+
+def group_level_tests(dataset, permutations: int, rng: np.random.Generator) -> pd.DataFrame:
+    rows = []
+    for lock, epochs, labels, tasks, groups in (("cue", dataset.epochs, dataset.labels, dataset.tasks, dataset.groups), ("target", dataset.target_epochs, dataset.target_labels, dataset.target_tasks, dataset.target_groups)):
+        time_mask = (dataset.times >= 0) & (dataset.times <= 0.6)
+        times = dataset.times[time_mask]
+        for task in (1, 2):
+            for feature in ("F3", "F4", "F4-F3", "normalized_F4-F3", "theta_ITPC", "alpha_ITPC"):
+                values = []
+                band = (4.0, 8.0) if feature == "theta_ITPC" else (8.0, 12.0)
+                if feature in {"theta_ITPC", "alpha_ITPC"}:
+                    sos = butter(3, band, btype="bandpass", fs=256.0, output="sos")
+                    filtered = sosfiltfilt(sos, epochs, axis=-1)
+                    phase = np.angle(hilbert(filtered, axis=-1))
+                for group in np.unique(groups[tasks == task]):
+                    selected = (tasks == task) & (groups == group)
+                    left = epochs[selected & (labels == -1)]
+                    right = epochs[selected & (labels == 1)]
+                    if not len(left) or not len(right):
+                        continue
+                    if feature in {"theta_ITPC", "alpha_ITPC"}:
+                        right_phase = phase[selected & (labels == 1)]
+                        left_phase = phase[selected & (labels == -1)]
+                        right_itpc = np.abs(np.exp(1j * right_phase).mean(axis=0)).mean(axis=0)
+                        left_itpc = np.abs(np.exp(1j * left_phase).mean(axis=0)).mean(axis=0)
+                        signal = right_itpc - left_itpc
+                    elif feature == "F3":
+                        signal = right[:, 1].mean(axis=0) - left[:, 1].mean(axis=0)
+                    elif feature == "F4":
+                        signal = right[:, 2].mean(axis=0) - left[:, 2].mean(axis=0)
+                    elif feature == "F4-F3":
+                        signal = (right[:, 2] - right[:, 1]).mean(axis=0) - (left[:, 2] - left[:, 1]).mean(axis=0)
+                    else:
+                        right_norm = (right[:, 2] - right[:, 1]) / np.maximum(np.sqrt((right[:, 1] ** 2 + right[:, 2] ** 2) / 2), 1e-6)
+                        left_norm = (left[:, 2] - left[:, 1]) / np.maximum(np.sqrt((left[:, 1] ** 2 + left[:, 2] ** 2) / 2), 1e-6)
+                        signal = right_norm.mean(axis=0) - left_norm.mean(axis=0)
+                    values.append(signal[time_mask])
+                if len(values) >= 2:
+                    clusters = cluster_sign_test(np.asarray(values), permutations, rng, alpha=0.05 / 24)
+                    rows.append({"lock": lock, "task": task, "feature": feature, "n_groups": len(values), "significant_clusters": len(clusters), "clusters": ";".join(f"{times[a]:.3f}-{times[b-1]:.3f}:p={p:.4f}" for a, b, p in clusters), "max_abs_d": float(np.nanmax(np.abs(np.mean(values, axis=0)) / np.maximum(np.std(values, axis=0, ddof=1), 1e-9)))})
+                else:
+                    rows.append({"lock": lock, "task": task, "feature": feature, "n_groups": len(values), "significant_clusters": 0, "clusters": "insufficient groups", "max_abs_d": np.nan})
+    return pd.DataFrame(rows)
+
+
+def positive_controls(dataset, permutations: int, rng: np.random.Generator) -> pd.DataFrame:
+    mask = (dataset.times >= 0.05) & (dataset.times <= 0.6)
+    cue_features = dataset.epochs[:, :, mask].mean(axis=2)
+    task_result = classify(cue_features, (dataset.tasks == 2).astype(int), dataset.subjects, permutations, rng)[0]
+    target = dataset.target_tasks == 1
+    target_features = dataset.target_epochs[target, :, mask].mean(axis=2)
+    location_result = classify(target_features, (dataset.target_labels[target] == 1).astype(int), dataset.target_subjects[target], permutations, rng)[0]
+    return pd.DataFrame([{ "control": "task1_vs_task2", **task_result }, { "control": "task1_target_position", **location_result }])
+
+
+def decodability_bounds(dataset) -> pd.DataFrame:
+    rows = []
+    for lock, epochs, labels, tasks in (("cue", dataset.epochs, dataset.labels, dataset.tasks), ("target", dataset.target_epochs, dataset.target_labels, dataset.target_tasks)):
+        for task in (1, 2):
+            selected = tasks == task
+            values = (epochs[selected, 2] - epochs[selected, 1])
+            y = labels[selected]
+            for start in np.arange(0, 0.6, 0.1):
+                window = (dataset.times >= start) & (dataset.times < start + 0.1)
+                per_trial = values[:, window].mean(axis=1)
+                a, b = per_trial[y == -1], per_trial[y == 1]
+                pooled = np.sqrt(((len(a)-1)*a.var(ddof=1) + (len(b)-1)*b.var(ddof=1)) / max(len(a)+len(b)-2, 1))
+                d = (b.mean() - a.mean()) / max(pooled, np.finfo(float).eps)
+                rows.append({"lock": lock, "task": task, "window_start_s": start, "window_stop_s": start + 0.1, "cohens_d": d, "auc_upper_bound": float(ndtr(abs(d) / np.sqrt(2)))})
     return pd.DataFrame(rows)
 
 

@@ -60,18 +60,29 @@ def encode_shape(stimulus: np.ndarray) -> np.ndarray:
     return maps
 
 
-def cortical_projection(features: np.ndarray, grid_size: int = 16) -> np.ndarray:
-    image = features.mean(axis=0)
-    bins = image.shape[0] // grid_size
-    pooled = image[: bins * grid_size, : bins * grid_size].reshape(grid_size, bins, grid_size, bins).mean(axis=(1, 3))
+def cortical_projection(features: np.ndarray, grid_size: int = 16, mode: str = "shape", seed: int = 0) -> np.ndarray:
+    bins = features.shape[-1] // grid_size
+    pooled = features[:, : bins * grid_size, : bins * grid_size].reshape(4, grid_size, bins, grid_size, bins).mean(axis=(2, 4))
     projected = np.fliplr(pooled)
-    return projected / max(projected.max(), np.finfo(float).eps)
+    projected /= np.maximum(projected.max(axis=(1, 2), keepdims=True), np.finfo(float).eps)
+    if mode == "constant":
+        return np.ones((grid_size, grid_size))
+    if mode == "random":
+        rng = np.random.default_rng(seed)
+        noise = rng.normal(size=(grid_size, grid_size))
+        return (noise - noise.min()) / max(noise.max() - noise.min(), np.finfo(float).eps)
+    if mode == "collapsed":
+        return projected.mean(axis=0)
+    if mode != "shape":
+        raise ValueError(f"Unknown drive mode: {mode}")
+    return projected
 
 
-def lead_fields(grid_size: int) -> np.ndarray:
+def lead_fields(grid_size: int, shift: float = 0.0, depth_factor: float = 1.0) -> np.ndarray:
     y, x = np.mgrid[-1:1:complex(grid_size), -1:1:complex(grid_size)]
-    centers = ((0.0, 0.28), (-0.55, 0.30), (0.55, 0.30))
-    fields = np.asarray([np.exp(-((x - cx) ** 2 + (y - cy) ** 2) / (2 * 0.52**2)) for cx, cy in centers])
+    centers = ((0.0, 0.28), (-0.55 * (1.0 + shift), 0.30), (0.55 * (1.0 + shift), 0.30))
+    depth = 0.35 * depth_factor
+    fields = np.asarray([1.0 / ((x - cx) ** 2 + (y - cy) ** 2 + depth**2) for cx, cy in centers])
     return fields / fields.sum(axis=(1, 2), keepdims=True)
 
 
@@ -80,10 +91,14 @@ def _bandpass(data: np.ndarray, rate: float, low: float, high: float) -> np.ndar
     return sosfiltfilt(sos, data, axis=-1)
 
 
-def simulate(side: int, times: np.ndarray, rate: float, parameters: ModelParameters, grid_size: int = 16) -> Simulation:
+def simulate(side: int, times: np.ndarray, rate: float, parameters: ModelParameters, grid_size: int = 16, drive_mode: str = "shape", seed: int = 0, geometry_shift: float = 0.0) -> Simulation:
     stimulus = triangle_image(side)
     features = encode_shape(stimulus)
-    drive_map = cortical_projection(features, grid_size)
+    projected = cortical_projection(features, grid_size, drive_mode, seed)
+    if projected.ndim == 3:
+        drive_map = projected.mean(axis=0) + 0.25 * (projected[1] - projected[3])
+    else:
+        drive_map = projected
     e = np.full((grid_size, grid_size), 0.035)
     i = np.full_like(e, 0.025)
     source = np.zeros((grid_size, grid_size, len(times)))
@@ -99,7 +114,7 @@ def simulate(side: int, times: np.ndarray, rate: float, parameters: ModelParamet
         source[..., k] = e - 0.72 * i
     baseline = times < 0
     source -= source[..., baseline].mean(axis=-1, keepdims=True)
-    fields = lead_fields(grid_size)
+    fields = lead_fields(grid_size, geometry_shift, 1.0 + geometry_shift)
     eeg = np.einsum("cyx,yxt->ct", fields, source)
     eeg = _bandpass(eeg, rate, 0.5, 30.0)
     phase = np.angle(hilbert(_bandpass(source.reshape(-1, len(times)), rate, 4.0, 12.0), axis=-1)).reshape(source.shape)
