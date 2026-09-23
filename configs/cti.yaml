@@ -1,0 +1,40 @@
+random_seed: 20260923
+paths:
+  data_dir: C题/dataset
+  q1_output_dir: outputs/q1
+sample_rate: 256
+channels:
+  eeg: [Fz, F3, F4]
+  ecg: ECG
+  cue_prefix: VisCue
+  task_1_action_prefix: Action
+  task_2_action_prefix: TgtAct
+windows:
+  cue: [-0.5, 1.0]
+  baseline: [-0.5, -0.2]
+  primary: [0.25, 0.5]
+quality:
+  saturation: 1000.0
+  hard_trial_peak_to_peak: 400.0
+  plateau_min_samples: 3
+  transient_mad_scale: 8.0
+  cross_channel_mad_scale: 6.0
+  reliability_floor: 0.001
+  short_interpolation_seconds: 0.1
+filter:
+  highpass_candidates: [0.1, 0.3, 0.5]
+  lowpass: 35.0
+  notch: 50.0
+validation:
+  outer_folds: 5
+  trials_per_block: 20
+  inner_folds: 4
+  surrogate_permutations: 10000
+  label_permutations: 1000
+  bootstrap_samples: 2000
+  minimum_shift_seconds: 1.5
+  local_block_seconds: 60.0
+recovery:
+  minimum_rank_correlation: 0.5
+  coverage_range: [0.6, 0.99]
+truncation_milliseconds: [100, 300, 500]
