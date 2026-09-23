@@ -51,6 +51,43 @@ def three_node_kuramoto(times: np.ndarray, rate: float, project: int) -> np.ndar
     return kuramoto(times, frequencies, coupling, delays, rate)
 
 
+def cognition_segments(dataset: Epochs, subject: str, task: int, rate: float) -> tuple[np.ndarray, np.ndarray]:
+    """Target-locked broadband, truncated per trial to 100 ms before the response."""
+    selected = (dataset.target_subject == subject) & (dataset.target_task == task)
+    values = dataset.target_broadband[selected][:, 0]
+    reaction = dataset.target_reaction_time[selected]
+    start = int(0.2 * rate)
+    segments = []
+    for trial, rt in zip(values, reaction, strict=True):
+        stop = min(int((rt + 0.1) * rate), trial.size)
+        if stop > start + int(0.4 * rate):
+            segments.append(trial[start:stop])
+    return values, np.asarray(reaction), segments
+
+
+def electrode_synchrony(dataset: Epochs, subject: str, task: int, rate: float) -> tuple[np.ndarray, np.ndarray]:
+    """Three-electrode theta-band order parameter aligned to the response.
+
+    The model predicts the frontal synchrony (order parameter R) rises during
+    recognition and peaks just before the response.
+    """
+    selected = (dataset.target_subject == subject) & (dataset.target_task == task)
+    values = dataset.target_broadband[selected]
+    reaction = dataset.target_reaction_time[selected]
+    start = int(0.2 * rate)
+    grid = np.linspace(-1.5, 0.0, 60)
+    curves = []
+    for trial, rt in zip(values, reaction, strict=True):
+        stop = min(int((rt + 0.1) * rate), trial.shape[-1])
+        if stop - start < int(0.4 * rate):
+            continue
+        phases = np.angle(hilbert(bandpass(trial[:, start:stop], rate, *BANDS["theta"]), axis=-1))
+        radius = np.abs(np.exp(1j * phases).mean(axis=0))
+        time_to_response = (np.arange(stop - start) - (stop - start)) / rate
+        curves.append(np.interp(grid, time_to_response, radius))
+    return grid, np.asarray(curves)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/cti.yaml")
@@ -68,20 +105,33 @@ def main() -> None:
     rows = []
     for subject in ("A", "B"):
         for task in (1, 2):
-            selected = (dataset.subject == subject) & (dataset.task == task)
-            values = dataset.cue_broadband[selected][:, 0]
-            reaction = dataset.reaction_time[selected]
-            theta = bandpass(values, rate, *BANDS["theta"])
-            gamma = bandpass(values, rate, *BANDS["low_gamma"])
+            _, reaction, segments = cognition_segments(dataset, subject, task, rate)
             median = float(np.median(reaction))
-            for label, mask in (("all", np.ones(len(values), dtype=bool)), ("fast", reaction < median), ("slow", reaction >= median)):
-                if mask.sum() < 2:
+            theta = [bandpass(segment, rate, *BANDS["theta"]) for segment in segments]
+            gamma = [bandpass(segment, rate, *BANDS["low_gamma"]) for segment in segments]
+            for label, mask in (("all", np.ones(len(segments), dtype=bool)), ("fast", reaction < median), ("slow", reaction >= median)):
+                chosen = [index for index in np.flatnonzero(mask) if index < len(segments)]
+                if len(chosen) < 2:
                     continue
-                observed, probability = surrogate_pac(theta[mask].reshape(-1), gamma[mask].reshape(-1), args.permutations, rng)
-                rows.append({"subject": subject, "task": task, "group": label, "reaction_median_s": round(median, 3), "n_trials": int(mask.sum()), "mi": observed, "p_value": probability})
+                phase = np.concatenate([theta[index] for index in chosen])
+                amplitude = np.concatenate([gamma[index] for index in chosen])
+                observed, probability = surrogate_pac(phase, amplitude, args.permutations, rng)
+                rows.append({"subject": subject, "task": task, "group": label, "reaction_median_s": round(median, 3), "n_trials": int(len(chosen)), "mi": observed, "p_value": probability})
     frame = pd.DataFrame(rows)
-    frame.to_csv(output / "pac.csv", index=False)
+    frame.to_csv(output / "pac_target_locked.csv", index=False)
     print(frame.round(4).to_string(index=False))
+
+    synchrony_rows = []
+    for subject in ("A", "B"):
+        for task in (1, 2):
+            grid, curves = electrode_synchrony(dataset, subject, task, rate)
+            mean = curves.mean(axis=0)
+            early, late = float(mean[:12].mean()), float(mean[-12:].mean())
+            synchrony_rows.append({"subject": subject, "task": task, "n_trials": int(len(curves)), "sync_early": early, "sync_late": late, "sync_rise": late - early})
+            np.savez(output / f"synchrony_{subject}_task{task}.npz", grid=grid, curves=curves)
+    sync = pd.DataFrame(synchrony_rows)
+    sync.to_csv(output / "synchrony.csv", index=False)
+    print(sync.round(4).to_string(index=False))
 
     times = dataset.times
     for project in (1, 2):
