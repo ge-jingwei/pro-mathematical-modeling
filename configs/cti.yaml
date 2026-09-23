@@ -10,8 +10,9 @@ channels:
   task_1_action_prefix: Action
   task_2_action_prefix: TgtAct
 windows:
-  cue: [-0.5, 1.0]
-  baseline: [-0.5, -0.2]
+  cue: [-0.2, 0.8]
+  target: [-0.2, 0.8]
+  baseline: [-0.2, 0.0]
   primary: [0.25, 0.5]
 quality:
   saturation: 1000.0
@@ -21,26 +22,10 @@ quality:
   cross_channel_mad_scale: 6.0
   reliability_floor: 0.001
   short_interpolation_seconds: 0.1
-filter:
-  highpass_candidates: [0.1, 0.3, 0.5]
-  lowpass: 35.0
-  notch: 50.0
-validation:
-  outer_folds: 5
-  trials_per_block: 20
-  inner_folds: 4
-  surrogate_permutations: 10000
-  label_permutations: 1000
-  bootstrap_samples: 2000
-  minimum_shift_seconds: 1.5
-  local_block_seconds: 60.0
-  cardiac_permutations: 2000
-cardiac:
-  bandpass: [5.0, 25.0]
-  peak_mad_scale: 4.0
-  refractory_seconds: 0.25
-  lag_seconds: 0.2
-recovery:
-  minimum_rank_correlation: 0.5
-  coverage_range: [0.6, 0.99]
-truncation_milliseconds: [100, 300, 500]
+wavelet:
+  alpha_candidates: [0.0, 16.0, 32.0, 64.0, 96.0, 128.0, 192.0, 256.0, 384.0, 512.0, 768.0]
+  minimum_fidelity: 0.9
+statistics:
+  bootstrap_samples: 1000
+  cluster_permutations: 1000
+  label_permutations: 5000
