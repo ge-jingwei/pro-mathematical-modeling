@@ -1,0 +1,96 @@
+           record  total  retained  excluded  left  right
+VisualCogA_Task-1    100        82        18    42     40
+VisualCogA_Task-2    100        81        19    47     34
+VisualCogB_Task-1    100        84        16    41     43
+VisualCogB_Task-2    100        72        28    34     38
+Outer 1/12 cross_A_to_B: train=163, test=156
+  Model fit cross_A_to_B_inner0: 127 input trials
+  Model fit cross_A_to_B_inner1: 134 input trials
+  Model fit cross_A_to_B_inner2: 128 input trials
+  Model fit cross_A_to_B_inner3: 127 input trials
+  Model fit cross_A_to_B_inner4: 125 input trials
+  Model fit cross_A_to_B_final: 163 input trials
+  erp: inner BA=0.571, test ACC=0.506, BA=0.505, AUC=0.530
+  source: inner BA=0.599, test ACC=0.500, BA=0.500, AUC=0.483
+  combined: inner BA=0.625, test ACC=0.487, BA=0.486, AUC=0.470
+Outer 2/12 cross_B_to_A: train=156, test=163
+  Model fit cross_B_to_A_inner0: 124 input trials
+  Model fit cross_B_to_A_inner1: 124 input trials
+  Model fit cross_B_to_A_inner2: 123 input trials
+  Model fit cross_B_to_A_inner3: 118 input trials
+  Model fit cross_B_to_A_inner4: 120 input trials
+  Model fit cross_B_to_A_final: 156 input trials
+  erp: inner BA=0.512, test ACC=0.503, BA=0.505, AUC=0.577
+  source: inner BA=0.599, test ACC=0.509, BA=0.516, AUC=0.499
+  combined: inner BA=0.591, test ACC=0.466, BA=0.476, AUC=0.499
+Outer 3/12 within_A_block0: train=127, test=34
+  Model fit within_A_block0_inner1: 101 input trials
+  Model fit within_A_block0_inner2: 92 input trials
+  Model fit within_A_block0_inner3: 91 input trials
+  Model fit within_A_block0_inner4: 89 input trials
+  erp: inner BA=0.579, test ACC=0.500, BA=0.500, AUC=0.546
+  source: inner BA=0.568, test ACC=0.588, BA=0.575, AUC=0.543
+  combined: inner BA=0.592, test ACC=0.588, BA=0.607, AUC=0.568
+Outer 4/12 within_A_block1: train=134, test=28
+  Model fit within_A_block1_inner2: 100 input trials
+  Model fit within_A_block1_inner3: 98 input trials
+  Model fit within_A_block1_inner4: 96 input trials
+  erp: inner BA=0.588, test ACC=0.571, BA=0.583, AUC=0.547
+  source: inner BA=0.568, test ACC=0.571, BA=0.583, AUC=0.615
+  combined: inner BA=0.580, test ACC=0.571, BA=0.583, AUC=0.609
+Outer 5/12 within_A_block2: train=128, test=32
+  Model fit within_A_block2_inner3: 96 input trials
+  Model fit within_A_block2_inner4: 90 input trials
+  erp: inner BA=0.541, test ACC=0.531, BA=0.539, AUC=0.533
+  source: inner BA=0.627, test ACC=0.469, BA=0.469, AUC=0.439
+  combined: inner BA=0.622, test ACC=0.406, BA=0.402, AUC=0.490
+Outer 6/12 within_A_block3: train=127, test=32
+  Model fit within_A_block3_inner4: 92 input trials
+  erp: inner BA=0.535, test ACC=0.531, BA=0.531, AUC=0.527
+  source: inner BA=0.582, test ACC=0.469, BA=0.469, AUC=0.469
+  combined: inner BA=0.603, test ACC=0.500, BA=0.500, AUC=0.469
+Outer 7/12 within_A_block4: train=125, test=37
+  erp: inner BA=0.568, test ACC=0.541, BA=0.526, AUC=0.585
+  source: inner BA=0.595, test ACC=0.595, BA=0.590, AUC=0.582
+  combined: inner BA=0.618, test ACC=0.568, BA=0.556, AUC=0.497
+Outer 8/12 within_B_block0: train=124, test=30
+  Model fit within_B_block0_inner1: 95 input trials
+  Model fit within_B_block0_inner2: 91 input trials
+  Model fit within_B_block0_inner3: 86 input trials
+  Model fit within_B_block0_inner4: 88 input trials
+  erp: inner BA=0.494, test ACC=0.433, BA=0.433, AUC=0.444
+  source: inner BA=0.545, test ACC=0.400, BA=0.400, AUC=0.493
+  combined: inner BA=0.561, test ACC=0.467, BA=0.467, AUC=0.467
+Outer 9/12 within_B_block1: train=124, test=29
+  Model fit within_B_block1_inner2: 95 input trials
+  Model fit within_B_block1_inner3: 86 input trials
+  Model fit within_B_block1_inner4: 88 input trials
+  erp: inner BA=0.604, test ACC=0.310, BA=0.321, AUC=0.293
+  source: inner BA=0.621, test ACC=0.483, BA=0.477, AUC=0.475
+  combined: inner BA=0.613, test ACC=0.586, BA=0.578, AUC=0.551
+Outer 10/12 within_B_block2: train=123, test=29
+  Model fit within_B_block2_inner3: 89 input trials
+  Model fit within_B_block2_inner4: 87 input trials
+  erp: inner BA=0.528, test ACC=0.586, BA=0.543, AUC=0.545
+  source: inner BA=0.562, test ACC=0.586, BA=0.596, AUC=0.540
+  combined: inner BA=0.588, test ACC=0.724, BA=0.725, AUC=0.763
+Outer 11/12 within_B_block3: train=118, test=34
+  Model fit within_B_block3_inner4: 86 input trials
+  erp: inner BA=0.533, test ACC=0.441, BA=0.471, AUC=0.621
+  source: inner BA=0.538, test ACC=0.559, BA=0.550, AUC=0.604
+  combined: inner BA=0.546, test ACC=0.618, BA=0.621, AUC=0.643
+Outer 12/12 within_B_block4: train=120, test=34
+  erp: inner BA=0.477, test ACC=0.529, BA=0.531, AUC=0.559
+  source: inner BA=0.569, test ACC=0.559, BA=0.559, AUC=0.608
+  combined: inner BA=0.598, test ACC=0.559, BA=0.562, AUC=0.576
+  mode   scheme  accuracy  balanced_accuracy      auc
+ cross      erp  0.504702           0.505370 0.553188
+ cross   source  0.504702           0.505724 0.491096
+ cross combined  0.476489           0.478285 0.484764
+ cross selected  0.498433           0.499803 0.484840
+within      erp  0.498433           0.499272 0.520256
+within   source  0.529781           0.529937 0.536745
+within combined  0.557994           0.558615 0.563228
+within selected  0.554859           0.555566 0.544304
+Verified 325 checks and 3 figures
+Completed: final; elapsed=186.5s

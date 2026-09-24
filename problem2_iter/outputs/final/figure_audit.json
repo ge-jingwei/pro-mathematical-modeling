@@ -1,0 +1,17 @@
+[
+  {
+    "file": "accuracy_comparison.pdf",
+    "returncode": 0,
+    "detail": "Nature Figure Rendered Collision Audit\npdf: final/figures/accuracy_comparison.pdf\npages: 1\nvisible text boxes: 24\nstroke paths: 76\n\n\nsummary: 0 fail, 0 warn, 0 contained fill overlays, 0 contained image overlays\nverdict: PASS\nnote: contained overlays can be intentional; WARN findings need final-size visual review\n"
+  },
+  {
+    "file": "confusion_matrices.pdf",
+    "returncode": 0,
+    "detail": "Nature Figure Rendered Collision Audit\npdf: final/figures/confusion_matrices.pdf\npages: 1\nvisible text boxes: 66\nstroke paths: 36\n\n\nsummary: 0 fail, 0 warn, 24 contained fill overlays, 24 contained image overlays\nverdict: PASS\nnote: contained overlays can be intentional; WARN findings need final-size visual review\n"
+  },
+  {
+    "file": "roc_comparison.pdf",
+    "returncode": 0,
+    "detail": "Nature Figure Rendered Collision Audit\npdf: final/figures/roc_comparison.pdf\npages: 1\nvisible text boxes: 36\nstroke paths: 42\n\n\nsummary: 0 fail, 0 warn, 0 contained fill overlays, 0 contained image overlays\nverdict: PASS\nnote: contained overlays can be intentional; WARN findings need final-size visual review\n"
+  }
+]

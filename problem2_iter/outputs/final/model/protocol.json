@@ -1,0 +1,112 @@
+{
+  "seed": 20260924,
+  "inversion_alphas": [
+    1e-05,
+    0.001,
+    0.03,
+    0.3
+  ],
+  "classifier_grid": [
+    [
+      "logistic",
+      0.01
+    ],
+    [
+      "logistic",
+      0.1
+    ],
+    [
+      "logistic",
+      1.0
+    ],
+    [
+      "logistic",
+      10.0
+    ],
+    [
+      "svm",
+      0.01
+    ],
+    [
+      "svm",
+      0.1
+    ],
+    [
+      "svm",
+      1.0
+    ],
+    [
+      "svm",
+      10.0
+    ],
+    [
+      "lda",
+      0.1
+    ],
+    [
+      "lda",
+      0.5
+    ],
+    [
+      "lda",
+      0.9
+    ]
+  ],
+  "selected_dimensions": {
+    "erp": [
+      8,
+      15
+    ],
+    "source": [
+      6,
+      12
+    ],
+    "combined": [
+      8,
+      12,
+      15
+    ]
+  },
+  "schemes": [
+    "erp",
+    "source",
+    "combined"
+  ],
+  "main_metric": "mean inner-fold balanced accuracy",
+  "inner_validation": "all available chronological blocks, train-only one-trial purge",
+  "outer_validation": "two cross-recording directions plus five leave-block-out folds per recording group",
+  "model": "refit the original fifteen-parameter simple model in every inner and outer training split",
+  "feature_counts": {
+    "erp": 15,
+    "source": 12,
+    "combined": 15
+  },
+  "combined_scalp_weight": 0.5,
+  "no_test_rejection": true,
+  "known_test_set_from_prior_iteration": true,
+  "exploratory_evaluation": "not a new prospectively untouched confirmation set",
+  "hardware": {
+    "selected_gpu": 1,
+    "gpu_table": [
+      [
+        0,
+        20734,
+        36
+      ],
+      [
+        1,
+        21207,
+        34
+      ]
+    ],
+    "name": "NVIDIA GeForce RTX 3090",
+    "torch_version": "2.13.0+cu130",
+    "cuda": "13.0"
+  },
+  "source_sha256": {
+    "classifier.py": "e5529302dc05960b3f29ef0f980b27a6218439a8de2fd59afbff355146a2db6a",
+    "run_iter.py": "fa45c8d323882a73705b730e9837bb36d9afdf769255e3bca3c4342a76f0a7fd",
+    "source_features.py": "1ff63a1cb7f710fe2098eef25c4f146a1d65c362fc4079038c450ed26305d3fa",
+    "utils.py": "8155ead40f47a8743f8b7d3da23b3fb3cff1ffd5aa6cac4ecd3601b3043f9eea"
+  }
+}
