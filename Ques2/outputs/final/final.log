@@ -1,0 +1,36 @@
+Stage 1: inspect VisualCogA_Task-1.mat
+Stage 1: inspect VisualCogA_Task-2.mat
+Stage 1: inspect VisualCogB_Task-1.mat
+Stage 1: inspect VisualCogB_Task-2.mat
+               记录  事件数  保留  删除  左  右  分类硬质控保留
+VisualCogA_Task-1  100  77  23 39 38       82
+VisualCogA_Task-2  100  79  21 45 34       81
+VisualCogB_Task-1  100  80  20 38 42       84
+VisualCogB_Task-2  100  72  28 34 38       72
+Stage 1 passed: (308, 3, 257); baseline error=3.97e-13
+Fit stage2_A_inner_simple: simple; 115/121 training trials
+Fit stage2_A_inner_cascade: cascade; 115/121 training trials
+Fit stage2_A_final: simple; 157/163 training trials
+Stage 2 completed:                      rmse        r2
+scope     task                     
+heldout_B 1     25.682953 -2.473019
+          2     48.609366 -9.001760
+train_A   1      9.890349 -0.275912
+          2     20.710906  0.805290
+Fit A_to_B_inner_simple: simple; 115/121 training trials
+Fit A_to_B_inner_cascade: cascade; 115/121 training trials
+Fit A_to_B_final: simple; 157/163 training trials
+Stage 3 A_to_B: erp/logistic; validation=0.570; test=0.550
+Stage 3 A_to_B: source/svm; validation=0.595; test=0.509
+Stage 3 A_to_B: scalp/svm; validation=0.542; test=0.476
+Stage 3 A_to_B: combined/svm; validation=0.539; test=0.540
+Fit B_to_A_inner_simple: simple; 114/115 training trials
+Fit B_to_A_inner_cascade: cascade; 114/115 training trials
+Fit B_to_A_final: simple; 153/156 training trials
+Stage 3 B_to_A: erp/lda; validation=0.506; test=0.561
+Stage 3 B_to_A: source/svm; validation=0.565; test=0.507
+Stage 3 B_to_A: scalp/lda; validation=0.518; test=0.477
+Stage 3 B_to_A: combined/logistic; validation=0.561; test=0.565
+Stage 3 completed: {"accuracy": 0.5015673981191222, "balanced_accuracy": 0.5023210070810386, "macro_f1": 0.5014890166592954, "roc_auc": 0.4921498902148091, "left_recall": 0.47560975609756095, "right_recall": 0.5290322580645161, "n": 319, "left_left": 78, "left_right": 86, "right_left": 73, "right_right": 82, "roc_auc_note": "unweighted mean of outer-fold AUC; decision score scales are not pooled", "cross_recording_dependence_note": "two directions use different fitted models; pooled confusion is descriptive, not independent replication"}
+Verification passed: 36 checks; seven figure audits
+Completed stage 3: final

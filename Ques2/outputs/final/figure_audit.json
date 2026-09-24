@@ -1,0 +1,37 @@
+[
+  {
+    "file": "stage1_erp.pdf",
+    "returncode": 0,
+    "summary": "Nature Figure Rendered Collision Audit\npdf: final/figures/stage1_erp.pdf\npages: 1\nvisible text boxes: 60\nstroke paths: 80\n\n\nsummary: 0 fail, 0 warn, 0 contained fill overlays, 0 contained image overlays\nverdict: PASS\nnote: contained overlays can be intentional; WARN findings need final-size visual review\n"
+  },
+  {
+    "file": "stage2_fit_heldout.pdf",
+    "returncode": 0,
+    "summary": "Nature Figure Rendered Collision Audit\npdf: final/figures/stage2_fit_heldout.pdf\npages: 1\nvisible text boxes: 162\nstroke paths: 197\n\n\nsummary: 0 fail, 0 warn, 0 contained fill overlays, 0 contained image overlays\nverdict: PASS\nnote: contained overlays can be intentional; WARN findings need final-size visual review\n"
+  },
+  {
+    "file": "stage2_fit_train.pdf",
+    "returncode": 0,
+    "summary": "Nature Figure Rendered Collision Audit\npdf: final/figures/stage2_fit_train.pdf\npages: 1\nvisible text boxes: 160\nstroke paths: 195\n\n\nsummary: 0 fail, 0 warn, 0 contained fill overlays, 0 contained image overlays\nverdict: PASS\nnote: contained overlays can be intentional; WARN findings need final-size visual review\n"
+  },
+  {
+    "file": "stage2_sources.pdf",
+    "returncode": 0,
+    "summary": "Nature Figure Rendered Collision Audit\npdf: final/figures/stage2_sources.pdf\npages: 1\nvisible text boxes: 63\nstroke paths: 71\n\n\nsummary: 0 fail, 0 warn, 0 contained fill overlays, 0 contained image overlays\nverdict: PASS\nnote: contained overlays can be intentional; WARN findings need final-size visual review\n"
+  },
+  {
+    "file": "stage3_coefficients.pdf",
+    "returncode": 0,
+    "summary": "Nature Figure Rendered Collision Audit\npdf: final/figures/stage3_coefficients.pdf\npages: 1\nvisible text boxes: 26\nstroke paths: 28\n\n\nsummary: 0 fail, 0 warn, 0 contained fill overlays, 0 contained image overlays\nverdict: PASS\nnote: contained overlays can be intentional; WARN findings need final-size visual review\n"
+  },
+  {
+    "file": "stage3_confusion.pdf",
+    "returncode": 0,
+    "summary": "Nature Figure Rendered Collision Audit\npdf: final/figures/stage3_confusion.pdf\npages: 1\nvisible text boxes: 11\nstroke paths: 6\n\n\nsummary: 0 fail, 0 warn, 0 contained fill overlays, 0 contained image overlays\nverdict: PASS\nnote: contained overlays can be intentional; WARN findings need final-size visual review\n"
+  },
+  {
+    "file": "stage3_roc.pdf",
+    "returncode": 0,
+    "summary": "Nature Figure Rendered Collision Audit\npdf: final/figures/stage3_roc.pdf\npages: 1\nvisible text boxes: 38\nstroke paths: 46\n\n\nsummary: 0 fail, 0 warn, 0 contained fill overlays, 0 contained image overlays\nverdict: PASS\nnote: contained overlays can be intentional; WARN findings need final-size visual review\n"
+  }
+]

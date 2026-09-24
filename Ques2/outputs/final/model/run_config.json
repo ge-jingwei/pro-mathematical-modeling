@@ -1,0 +1,37 @@
+{
+  "seed": 20260924,
+  "hardware": {
+    "selected_gpu": 1,
+    "gpu_table": [
+      [
+        0,
+        20734,
+        38
+      ],
+      [
+        1,
+        21207,
+        39
+      ]
+    ],
+    "name": "NVIDIA GeForce RTX 3090",
+    "torch_version": "2.13.0+cu130",
+    "cuda": "13.0"
+  },
+  "data": "/home/gejw/mm/q1_20260924/dataset",
+  "cache": "/home/gejw/mm/q1_20260924/results",
+  "command": [
+    "problem2/run_problem2.py",
+    "--server",
+    "--data",
+    "/home/gejw/mm/q1_20260924/dataset",
+    "--cache",
+    "/home/gejw/mm/q1_20260924/results",
+    "--out",
+    "final",
+    "--stage",
+    "3"
+  ],
+  "stage": 3,
+  "preencoding_commit": "61eda6e"
+}
