@@ -14,7 +14,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.svm import LinearSVC
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, roc_auc_score, confusion_matrix, roc_curve
-from utils import TIME, CHANNELS, CONDITIONS, SEED, condition_means, training_quality, erp_features, dump, markdown_table, save
+from Ques2.utils import TIME, CHANNELS, CONDITIONS, SEED, condition_means, training_quality, erp_features, dump, save
 
 PARAMETERS = ["tau_r", "tau_gap", "tau_s", "tau_c", "rho", "g_s", "delta_1", "delta_2", "g_c1", "g_c2"]
 LOW = np.array([.008, .025, .015, .025, .0, .2, .03, .03, .05, .05])
@@ -156,9 +156,9 @@ def fit_training(X, meta, ids, device, variant, tag, out):
     print(f"Fit {tag}: {variant}; {len(kept)}/{len(ids)} training trials", flush=True)
     model = fit(erp, variant)
     model.update(training_indices=kept.tolist(), input_training_indices=ids.tolist(), training_thresholds=thresholds.tolist(), fit_tag=tag)
-    dump(out / "model" / f"{tag}.json", model)
+    dump(out / f"{tag}.json", model)
     pred, Q = predict(model)
-    np.savez_compressed(out / "model" / f"{tag}_curves.npz", observed=erp, predicted=pred, sources=Q, times=TIME)
+    np.savez_compressed(out / f"{tag}_curves.npz", observed=erp, predicted=pred, sources=Q, times=TIME)
     return model, erp, kept
 
 
@@ -184,7 +184,7 @@ def select_dynamics(X, meta, train, device, prefix, out):
         rows.append(dict(variant="cascade", validation_loss=extended_loss))
         if extended_loss < .95*base_loss:
             chosen = extended
-    pd.DataFrame(rows).to_csv(out / "tables" / f"{prefix}_dynamics_selection.csv", index=False)
+    pd.DataFrame(rows).to_csv(out / f"{prefix}_dynamics_selection.csv", index=False)
     return chosen, inner_kept, valid, rows
 
 
@@ -197,22 +197,22 @@ def stage2(X, meta, out, device):
     predicted, Q = predict(model)
     external = condition_means(X, meta, test, device)
     metrics = pd.DataFrame(fit_metrics(observed, predicted, "train_A") + fit_metrics(external, predicted, "heldout_B"))
-    metrics.to_csv(out / "tables" / "fit_metrics.csv", index=False)
+    metrics.to_csv(out / "fit_metrics.csv", index=False)
     params = [dict(parameter=n, value=v, lower=l, upper=h, boundary=bool(min((v-l)/(h-l), (h-v)/(h-l)) < .01))
               for n, v, l, h in zip(PARAMETERS, model["theta"], LOW, HIGH)]
     params += [dict(parameter=n, value=v, lower=-model["mixing_coefficient_bound"], upper=model["mixing_coefficient_bound"], boundary=bool(abs(v) > .99*model["mixing_coefficient_bound"])) for n, v in zip(["a", "b", "c", "d", "e"], model["coef"])]
-    pd.DataFrame(params).to_csv(out / "tables" / "parameters.csv", index=False)
+    pd.DataFrame(params).to_csv(out / "parameters.csv", index=False)
     G = mixing(model["coef"])
-    pd.DataFrame(G, index=CHANNELS, columns=["L", "R", "C"]).to_csv(out / "tables" / "mixing_matrix.csv")
+    pd.DataFrame(G, index=CHANNELS, columns=["L", "R", "C"]).to_csv(out / "mixing_matrix.csv")
     curves = []
     for k, (m, d) in enumerate(CONDITIONS):
         for c, ch in enumerate(CHANNELS):
             curves += [dict(task=m, direction=d, channel=ch, time_s=t, train_observed=a, heldout_observed=b, fitted=v)
                        for t, a, b, v in zip(TIME, observed[k, c], external[k, c], predicted[k, c])]
-    pd.DataFrame(curves).to_csv(out / "tables" / "fit_curves.csv", index=False)
+    pd.DataFrame(curves).to_csv(out / "fit_curves.csv", index=False)
     source_rows = [dict(task=m, direction=d, source=s, time_s=t, value=v)
                    for (m, d), q in zip(CONDITIONS, Q) for s, curve in zip(["L", "R", "C"], q) for t, v in zip(TIME, curve)]
-    pd.DataFrame(source_rows).to_csv(out / "tables" / "latent_sources.csv", index=False)
+    pd.DataFrame(source_rows).to_csv(out / "latent_sources.csv", index=False)
     for scope, obs, name in [("训练记录甲", observed, "stage2_fit_train"), ("留出记录乙", external, "stage2_fit_heldout")]:
         fig, axs = plt.subplots(4, 3, figsize=(11, 11))
         fig.subplots_adjust(left=.075, right=.98, bottom=.06, top=.93, hspace=.65, wspace=.32)
@@ -227,7 +227,7 @@ def stage2(X, meta, out, device):
                 ax.set(xlabel="时间（毫秒）", ylabel="原记录单位", xlim=(-200, 800))
         fig.suptitle(scope+"：四条件三电极", y=.987, fontsize=12)
         fig.legend(*axs[0, 0].get_legend_handles_labels(), loc="upper center", bbox_to_anchor=(.5, .974), ncol=2)
-        save(fig, out / "figures" / name)
+        save(fig, out / name)
     fig, axs = plt.subplots(2, 2, figsize=(10, 6.5))
     fig.subplots_adjust(left=.09, right=.98, bottom=.11, top=.89, hspace=.45, wspace=.3)
     for k, (ax, (m, d)) in enumerate(zip(axs.flat, CONDITIONS)):
@@ -235,7 +235,7 @@ def stage2(X, meta, out, device):
             ax.plot(TIME*1000, Q[k, c], color=color, label=label)
         ax.set(title=f"任务{m} · {'左' if d == -1 else '右'}刺激", xlabel="时间（毫秒）", ylabel="无量纲源活动", xlim=(-200, 800), ylim=(-.02, 1.02))
     fig.legend(*axs[0, 0].get_legend_handles_labels(), loc="upper center", ncol=3)
-    save(fig, out / "figures" / "stage2_sources")
+    save(fig, out / "stage2_sources")
     ceiling = []
     for m in [1, 2]:
         i = 2*(m-1)
@@ -246,16 +246,14 @@ def stage2(X, meta, out, device):
         total = np.sum((a-a.mean(-1, keepdims=True))**2)+np.sum((b-b.mean(-1, keepdims=True))**2)
         ceiling.append(dict(task=m, symmetry_minimum_rmse=float(np.sqrt(sse/a.size/2)),
                             symmetry_maximum_r2=float(1-sse/total)))
-    pd.DataFrame(ceiling).to_csv(out / "tables" / "symmetry_ceiling.csv", index=False)
+    pd.DataFrame(ceiling).to_csv(out / "symmetry_ceiling.csv", index=False)
     spectrum = np.linalg.svd(G, compute_uv=False)
     contrast_gain = abs(G[0, 0]-G[0, 1])/max(spectrum[0], 1e-12)
     diag = dict(relative_antisymmetric_gain=float(contrast_gain), singular_values=spectrum.tolist(),
                 condition_number=float(spectrum[0]/max(spectrum[-1], 1e-12)),
                 exact_middle_direction_invariance=bool(np.allclose(predicted[0, 1], predicted[1, 1]) and np.allclose(predicted[2, 1], predicted[3, 1])),
                 theta_multistart_range=(np.ptp([s["theta"] for s in model["starts"]], axis=0)/(HIGH-LOW)).tolist())
-    dump(out / "model" / "mechanism_diagnostics.json", diag)
-    text = f"""# 阶段二检查\n\n状态：数值计算通过；拟合不足与辨识限制必须保留。\n\n仅用记录甲训练，记录甲末段留作内部验证选择简单或增加固定公共上升环节的模型；随后用记录甲重新拟合。记录乙仅作外部检查，不参与参数、结构或初值选择。\n\n选定结构：{'一阶源加固定公共上升环节' if model['variant'] == 'cascade' else '三个一阶非线性源'}；自由参数十五个，三个初值，每初值最多二百二十次函数求值。拟合覆盖零至八百毫秒，二百五十至五百毫秒权重为一点五；两任务按训练幅度归一权重，避免任务二大幅慢波完全淹没任务一。\n\n{markdown_table(metrics.groupby(['scope', 'task'])[['rmse', 'r2', 'late_rmse']].mean().reset_index())}\n\n## 结构限制\n\n左右参数完全共享，传导矩阵严格对称，因此中额左右预测完全相同，双侧预测彼此镜像。该限制不能拟合真实数据中公共幅度的左右差异。对任意时间函数也成立的对称拟合上限如下，不能通过无限增加优化次数突破：\n\n{markdown_table(pd.DataFrame(ceiling))}\n\n相对于最大奇异增益，方向差异模态增益为 {contrast_gain:.4f}。这是本次训练模型的传导诊断，不是脑内真实源的直接观测。三源的尺度、源增益与混合幅度有混淆，多初值参数范围及边界命中已保存，参数不能解释为精确生理测量。\n\n峰值误差只描述二百五十至五百毫秒窗口最大值；边界命中已单独标记，不能当作可靠正峰潜伏期。没有把任务二晚期慢波命名为已确认的三百毫秒成分。\n"""
-    (out / "stage2_check.md").write_text(text, encoding="utf-8")
+    dump(out / "mechanism_diagnostics.json", diag)
     print("Stage 2 completed:", metrics.groupby(["scope", "task"])[["rmse", "r2"]].mean().to_string(), flush=True)
     return model
 
@@ -380,7 +378,7 @@ def stage3(X, meta, out, device):
                 frame = pd.DataFrame(fs[scheme], columns=names[scheme])
                 frame.insert(0, "index", ids); frame.insert(1, "split", split)
                 frame.insert(2, "y", meta.y.to_numpy()[ids]); frame.insert(3, "task", meta.task.to_numpy()[ids])
-                frame.to_csv(out / "tables" / f"{tag}_{scheme}_features_{split}.csv", index=False)
+                frame.to_csv(out / f"{tag}_{scheme}_features_{split}.csv", index=False)
         for scheme in FEATURE_SCHEMES:
             classifier = winners[scheme]["classifier"]
             pipeline = make_pipeline(StandardScaler(), clone(CLASSIFIERS[classifier]))
@@ -402,7 +400,7 @@ def stage3(X, meta, out, device):
                 selected_predictions.extend(records)
                 coefficients = pipeline[-1].coef_[0]
                 coefficient_rows += [dict(fold=tag, scheme=scheme, feature=n, coefficient=float(c)) for n, c in zip(names[scheme], coefficients)]
-                with (out / "model" / f"{tag}_classifier.pkl").open("wb") as handle:
+                with (out / f"{tag}_classifier.pkl").open("wb") as handle:
                     pickle.dump(dict(pipeline=pipeline, feature_scheme=scheme, names=names[scheme], model=final), handle)
             print(f"Stage 3 {tag}: {scheme}/{classifier}; validation={winners[scheme]['balanced_accuracy']:.3f}; test={row['balanced_accuracy']:.3f}", flush=True)
         manifest = dict(fold=tag, outer_train_indices=train.tolist(), final_training_indices=train_kept.tolist(), test_indices=test.tolist(),
@@ -416,20 +414,20 @@ def stage3(X, meta, out, device):
         manifests.append(manifest)
         mechanisms += [dict(fold=tag, **r) for r in template_separation(final)]
     table = pd.DataFrame(comparisons)
-    table.to_csv(out / "tables" / "classification_metrics.csv", index=False)
-    pd.DataFrame(tuning).to_csv(out / "tables" / "validation_selection.csv", index=False)
+    table.to_csv(out / "classification_metrics.csv", index=False)
+    pd.DataFrame(tuning).to_csv(out / "validation_selection.csv", index=False)
     allpred = pd.DataFrame(all_predictions)
-    allpred.to_csv(out / "tables" / "all_test_predictions.csv", index=False)
+    allpred.to_csv(out / "all_test_predictions.csv", index=False)
     chosen = pd.DataFrame(selected_predictions)
-    chosen.to_csv(out / "tables" / "selected_test_predictions.csv", index=False)
-    pd.DataFrame(coefficient_rows).to_csv(out / "tables" / "classifier_coefficients.csv", index=False)
-    pd.DataFrame(mechanisms).to_csv(out / "tables" / "template_separation.csv", index=False)
-    dump(out / "model" / "validation_manifest.json", manifests)
+    chosen.to_csv(out / "selected_test_predictions.csv", index=False)
+    pd.DataFrame(coefficient_rows).to_csv(out / "classifier_coefficients.csv", index=False)
+    pd.DataFrame(mechanisms).to_csv(out / "template_separation.csv", index=False)
+    dump(out / "validation_manifest.json", manifests)
     primary = metrics(chosen.y, chosen.prediction, chosen.score)
     primary["roc_auc"] = float(np.mean([roc_auc_score(z.y, z.score) for _, z in chosen.groupby("fold")]))
     primary["roc_auc_note"] = "unweighted mean of outer-fold AUC; decision score scales are not pooled"
     primary["cross_recording_dependence_note"] = "two directions use different fitted models; pooled confusion is descriptive, not independent replication"
-    dump(out / "model" / "primary_metrics.json", primary)
+    dump(out / "primary_metrics.json", primary)
     cm = confusion_matrix(chosen.y, chosen.prediction, labels=[-1, 1])
     fig, ax = plt.subplots(figsize=(5.1, 4.6))
     fig.subplots_adjust(left=.18, right=.92, bottom=.17, top=.86)
@@ -439,7 +437,7 @@ def stage3(X, meta, out, device):
             ax.text(j, i, str(cm[i, j]), ha="center", va="center", fontsize=20)
     ax.set(xticks=[0, 1], yticks=[0, 1], xticklabels=["左刺激", "右刺激"], yticklabels=["左刺激", "右刺激"],
            xlabel="预测类别", ylabel="真实类别", title="仅按内部验证选定：跨记录混淆矩阵")
-    save(fig, out / "figures" / "stage3_confusion")
+    save(fig, out / "stage3_confusion")
     fig, axs = plt.subplots(1, 2, figsize=(10.5, 4.5))
     fig.subplots_adjust(left=.08, right=.97, bottom=.17, top=.88, wspace=.32)
     roc_rows = []
@@ -453,8 +451,8 @@ def stage3(X, meta, out, device):
         ax.plot([0, 1], [0, 1], color=".6", ls="--")
         ax.set(title="甲训练乙测试" if fold == "A_to_B" else "乙训练甲测试", xlabel="假阳性率", ylabel="真阳性率", xlim=(0, 1), ylim=(0, 1))
         ax.legend(loc="lower right", fontsize=8)
-    save(fig, out / "figures" / "stage3_roc")
-    pd.DataFrame(roc_rows).to_csv(out / "tables" / "roc_curves.csv", index=False)
+    save(fig, out / "stage3_roc")
+    pd.DataFrame(roc_rows).to_csv(out / "roc_curves.csv", index=False)
     fig, axs = plt.subplots(1, 2, figsize=(11, 5))
     fig.subplots_adjust(left=.19, right=.98, bottom=.16, top=.86, wspace=.90)
     coef = pd.DataFrame(coefficient_rows)
@@ -464,13 +462,7 @@ def stage3(X, meta, out, device):
         ax.set_yticks(np.arange(len(z)), z.feature, fontsize=8)
         ax.axvline(0, color=".5", lw=.8)
         ax.set(xlabel="标准化特征的线性系数", title="甲训练乙测试" if fold == "A_to_B" else "乙训练甲测试")
-    save(fig, out / "figures" / "stage3_coefficients")
-    brief = table[table.fold.isin(["A_to_B", "B_to_A"])].copy()
-    brief["scheme"] = brief.scheme.map(DISPLAY)
-    brief = brief[["fold", "scheme", "classifier", "validation_balanced_accuracy", "balanced_accuracy", "accuracy", "macro_f1", "roc_auc", "selected_by_validation"]]
-    brief.columns = ["测试方向", "特征方案", "分类器", "验证平衡准确率", "测试平衡准确率", "测试准确率", "宏平均分数", "曲线下面积", "验证选定"]
-    text = f"""# 阶段三检查\n\n状态：通过；如实保留弱分类结果。\n\n{markdown_table(brief)}\n\n## 无泄漏检查\n\n两次外层分别为甲训练乙测试及乙训练甲测试。内层使用训练记录前四个连续时间块建模、第五块验证，并在块边界两侧各排除一个试次。每块二十次原始刺激，质量筛除不改变块编号。滤波在各块内独立执行，小波阈值逐片段估计。训练软质控、条件平均、动力学拟合和标准化分别在内层训练或最终外层训练数据重做；任何测试标签都不进入特征计算。测试集不因预测错误或软异常被删除，覆盖率和硬删除原因另存。\n\n每种特征方案均仅用内部验证平衡准确率，在逻辑回归、收缩线性判别和线性支持向量机之间选择。并列时使用预先固定顺序，不观察测试指标。最终方案也只按内部验证选择，不把测试表中最高一行改称最优模型。\n\n传统特征包括中期和晚期的三通道峰幅、峰时、均幅、面积及两个空间差，共二十八维；源特征八维；重建头皮特征二十八维；联合三十六维。峰幅与面积的冗余只由预定正则化处理，没有用测试集挑选特征。\n\n## 主结果\n\n按验证选定的两次外层预测合并：准确率 {primary['accuracy']:.4f}，平衡准确率 {primary['balanced_accuracy']:.4f}，宏平均分数 {primary['macro_f1']:.4f}，左右召回率 {primary['left_recall']:.4f} 和 {primary['right_recall']:.4f}。曲线下面积采用两外层等权均值 {primary['roc_auc']:.4f}，不混合不同模型的未校准评分尺度。\n\n## 源空间与头皮空间的证据边界\n\n真实测试的源特征由脑电反演得到，不能把测试刺激标签送入生成模型后得到的左右源曲线当作待分类输入。另存的无噪声模板间距是机制示意：它只说明所设模型经混合后的相对方向差异，既不是独立实验，也不是分类准确率。无噪声下，只要差异不为零，源和头皮两组确定模板均可完全分开；体积传导导致幅度变小不自动推出分类降至随机。源尺度不唯一、噪声及混合病态性都限制可解释性。\n\n仅有两个身份不明的记录组，本阶段不支持人群泛化、疾病诊断或明确因果机制。\n"""
-    (out / "stage3_check.md").write_text(text, encoding="utf-8")
+    save(fig, out / "stage3_coefficients")
     print("Stage 3 completed:", json.dumps(primary), flush=True)
     return primary
 

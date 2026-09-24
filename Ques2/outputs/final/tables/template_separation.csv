@@ -1,9 +1,0 @@
-fold,task,space,relative_template_distance,deterministic_distinct
-A_to_B,1,specified_source,0.22582045375177606,True
-A_to_B,1,simulated_scalp,0.016341432240979756,True
-A_to_B,2,specified_source,0.1014857107223775,True
-A_to_B,2,simulated_scalp,0.0039005138765823887,True
-B_to_A,1,specified_source,0.5927145864164419,True
-B_to_A,1,simulated_scalp,0.22265370061531048,True
-B_to_A,2,specified_source,0.22206013551532355,True
-B_to_A,2,simulated_scalp,0.05769669284940299,True

@@ -7,7 +7,7 @@ from scipy.optimize import minimize
 from scipy.special import expit
 from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, confusion_matrix, f1_score, recall_score
-from Ques3.utils import FS, SEED, CHANNELS, dump, table, load_early, fold_sources, observation_windows
+from Ques3.utils import FS, SEED, CHANNELS, dump, load_early, fold_sources, observation_windows
 
 NAMES = ["tau_m", "tau_z", "w_e", "w_m", "bias", "decision_threshold"]
 BOUNDS = np.array([[.08, 3.], [.08, 4.], [-2., 2.], [-2., 2.], [-2., 2.], [.08, 3.]])
@@ -204,7 +204,7 @@ def run_models(trials, args, device):
         for row in late_rows:
             row["scope"] = "after_evidence"
         eeg_rows.extend(late_rows)
-        search.to_csv(out / f"tables/{fold}_parameter_search.csv", index=False)
+        search.to_csv(out / f"{fold}_parameter_search.csv", index=False)
         fit_rows = trials[behavior].copy()
         fit_rows["fold"] = fold
         fit_rows["split"] = np.where(training[behavior], "train", "test")
@@ -219,9 +219,9 @@ def run_models(trials, args, device):
         fit_rows["prediction_horizon"] = horizon
         fit_rows["baseline_time"] = np.nanmedian(latency[training])
         fit_rows["eeg_eligible"] = observed[behavior].any(1)
-        fit_rows.to_csv(out / f"tables/{fold}_trial_predictions.csv", index=False)
+        fit_rows.to_csv(out / f"{fold}_trial_predictions.csv", index=False)
         outputs.append(fit_rows[fit_rows.split == "test"])
-        np.savez_compressed(out / f"model/{fold}_states.npz", row_id=trials.row_id.to_numpy(), time_s=times,
+        np.savez_compressed(out / f"{fold}_states.npz", row_id=trials.row_id.to_numpy(), time_s=times,
             q_left=q[:, 0], q_right=q[:, 1], q_common=q[:, 2], source_evidence=q[:, 1] - q[:, 0],
             evidence=evidence, memory=memory, decision=decision, observed_eeg=y, q2_eeg=baseline, extended_eeg=extended,
             eeg_mask=observed, behavioral_model_available=behavior, training=training, testing=testing,
@@ -230,7 +230,7 @@ def run_models(trials, args, device):
             mapping_ridge=ridge, mapping_training_samples=fit_samples, behavioral_training_ids=trials.row_id[training].tolist(),
             test_ids=trials.row_id[testing].tolist(), eeg_training_trials=int(sum(observed[training].any(1))),
             eeg_test_trials=int(sum(observed[testing].any(1))))
-        dump(out / f"model/{fold}_parameters.json", provenance)
+        dump(out / f"{fold}_parameters.json", provenance)
         parameter_rows.extend([dict(fold=fold, parameter=name, value=float(value)) for name, value in zip(NAMES, params)])
         checks.append(dict(fold=fold, train=int(sum(training)), test=int(sum(testing)), disjoint=not bool(np.any(training & testing)),
             initial_memory_zero=bool(np.all(memory[behavior, 0] == 0)), initial_decision_zero=bool(np.all(decision[behavior, 0] == 0)),
@@ -240,22 +240,20 @@ def run_models(trials, args, device):
                                 predictions=fit_rows[fit_rows.split == "test"], observed=observed, y=y, baseline=baseline, extended=extended)
         print(f"Stage 2 saved {fold}: loss={fitted['selected_loss']:.4f}; test n={sum(testing)}; EEG n={sum(observed[testing].any(1))}", flush=True)
     predictions = pd.concat(outputs, ignore_index=True).sort_values("row_id")
-    predictions.to_csv(out / "tables/out_of_fold_predictions.csv", index=False)
-    pd.DataFrame(parameter_rows).to_csv(out / "tables/parameters.csv", index=False)
-    pd.DataFrame(eeg_rows).to_csv(out / "tables/eeg_metrics.csv", index=False)
-    dump(out / "model/numerical_checks.json", checks)
+    predictions.to_csv(out / "out_of_fold_predictions.csv", index=False)
+    pd.DataFrame(parameter_rows).to_csv(out / "parameters.csv", index=False)
+    pd.DataFrame(eeg_rows).to_csv(out / "eeg_metrics.csv", index=False)
+    dump(out / "numerical_checks.json", checks)
     if not all(c["disjoint"] and c["initial_memory_zero"] and c["initial_decision_zero"] and c["finite"] for c in checks):
         raise ValueError("Numerical or split verification failed")
-    (out / "stage2_check.md").write_text("# 阶段二检查\n\n两折均通过训练测试隔离、零初值及有限数值检查。每折一百六十个有界候选和一次局部精调；完整参数、搜索损失、训练编号及所有试次的源轨迹均已保存。任务一的记忆、决策状态留空，不把缺失点击包装成遗漏机制。\n\n源反演直接调用问题二模型，不输入测试提示或点击标签。每折使用已有的训练记录专属问题二模型，并重新用训练记录校准证据尺度。源差为右源减左源；先收集固定零点八秒证据再开始读入模型，禁止早于取证结束使用整窗估计。后续源波形是从早期证据和问题二动力学外推，不是实测晚期源定位。\n\n记忆状态表示海马记忆匹配功能的潜在状态，不声称前额三电极直接测得海马活动。记忆输入系数固定为一，任务二先验为零，不拟合无法识别的任务一行为先验。决策驱动和阈值统一归一化，消除共同尺度任意性。状态在每试次开始清零；首越阈才产生实际阈值应答。二分类额外提供截止时刻符号读出，未越阈时不会伪造越阈时间。\n\n认知优化优先拟合行为，不联合优化脑电；映射仅在训练记录用岭回归估计。小型局部优化由处理器执行；源反演、批量候选状态递推与脑电映射使用所选显卡。脑电观测沿用问题一全记录零相位去噪，跨记录不混合，但它是离线重建评价，不是在线因果预测；整个应答前窗均报告，另存硬质控覆盖率。\n", encoding="utf-8")
     if args.stage >= 3:
         print("Stage 3: evaluate untouched recording groups", flush=True)
         choice, timing, confusion = behavior_metrics(predictions)
-        choice.to_csv(out / "tables/choice_metrics.csv", index=False)
-        timing.to_csv(out / "tables/time_metrics.csv", index=False)
-        confusion.to_csv(out / "tables/confusion_matrix.csv", index=False)
-        from Ques3.figures import make_figures, write_report
+        choice.to_csv(out / "choice_metrics.csv", index=False)
+        timing.to_csv(out / "time_metrics.csv", index=False)
+        confusion.to_csv(out / "confusion_matrix.csv", index=False)
+        from Ques3.figures import make_figures
         make_figures(trials, predictions, trajectory, choice, timing, confusion, pd.DataFrame(eeg_rows), out)
-        write_report(trials, predictions, choice, timing, pd.DataFrame(eeg_rows), checks, out)
         print(choice.to_string(index=False), flush=True)
         print(timing.to_string(index=False), flush=True)
 
