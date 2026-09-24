@@ -117,11 +117,12 @@ def write_report(trials, predictions, choice, timing, eeg, checks, out):
     comparison = full.groupby("model")[["nrmse", "r2", "pearson"]].mean().reset_index()
     paired = full.pivot(index=["fold", "channel"], columns="model", values="r2")
     improved = int(sum(paired.q2_plus_states > paired.q2_only))
-    counts = pd.read_csv(out / "tables/behavior_counts.csv")
     eeg_n = int(predictions.eeg_eligible.sum())
     choice_table = choice[["fold", "accuracy", "balanced_accuracy", "macro_f1", "recall_left", "recall_right", "threshold_accuracy", "threshold_response_coverage"]].rename(columns=dict(fold="验证方向", accuracy="二分类准确率", balanced_accuracy="二分类平衡准确率", macro_f1="宏平均调和分数", recall_left="左召回率", recall_right="右召回率", threshold_accuracy="阈值准确率", threshold_response_coverage="阈值覆盖率"))
     time_table = timing.rename(columns=dict(fold="验证方向", model="方法", actual_responses="真实应答数", evaluated="评价数", coverage="覆盖率", mae="平均绝对误差", rmse="均方根误差", spearman="秩相关"))
     eeg_table = comparison.rename(columns=dict(model="模型", nrmse="归一化均方根误差", r2="决定系数", pearson="线性相关"))
+    names = {"A_to_B": "甲组训练、乙组测试", "B_to_A": "乙组训练、甲组测试", "pooled": "合并", "threshold_crossed_only": "仅实际越阈预测", "training_median_baseline": "训练中位数基线", "q2_only": "问题二模型", "q2_plus_states": "增加认知状态"}
+    choice_table, time_table, eeg_table = [frame.replace(names) for frame in [choice_table, time_table, eeg_table]]
     text = f"""# 问题三最小认知模型报告
 
 ## 一、结论
@@ -200,7 +201,7 @@ def write_report(trials, predictions, choice, timing, eeg, checks, out):
 
 ## 九、交付与复现
 
-交付包含行为表、两折完整源及状态数组、逐试次真实阈值预测、独立二分类读出、参数和搜索损失、训练编号、脑电映射、方向与时间指标、脑电比較及五组图形。源轨迹文件也保留任务一视觉对照，任务一记忆与决策数组明确留空。固定随机种子为二零二六零九二四。
+交付包含行为表、两折完整源及状态数组、逐试次真实阈值预测、独立二分类读出、参数和搜索损失、训练编号、脑电映射、方向与时间指标、脑电比较及五组图形。源轨迹文件也保留任务一视觉对照，任务一记忆与决策数组明确留空。固定随机种子为二零二六零九二四。
 
 统一入口为 `python problem3/run_problem3.py`，默认通过现有远程工具运行；数据处理和模型拟合在指定环境及空闲显存较多的显卡上执行。已有输出禁止静默覆盖，明确复现需新输出目录，阶段续跑需显式指定续跑选项。
 """

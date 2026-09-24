@@ -1,7 +1,6 @@
 """Run the compact Question 3 pipeline on the designated CUDA server."""
 from pathlib import Path
 import argparse
-import os
 import shlex
 import sys
 import time
@@ -35,13 +34,19 @@ def main():
     started = time.time()
     dump(args.out / "model/run_config.json", dict(seed=20260924, hardware=hardware, stage=args.stage,
          command=sys.argv, preencoding_commit="488e576", data=str(args.data), q1=str(args.q1), q2=str(args.q2)))
+    dump(args.out / "model/completion.json", dict(status="running", stage=args.stage))
     try:
         trials = stage1(args.data, args.q1, args.q2, args.out)
         if args.stage >= 2:
             from Ques3.cognitive_model import run_models
             run_models(trials, args, device)
+        if args.stage >= 3:
+            from Ques3.verify import verify
+            verify(args.out, args.q2, device)
         dump(args.out / "model/completion.json", dict(status="complete", stage=args.stage, elapsed_s=time.time() - started))
+        (args.out / "blocked.md").unlink(missing_ok=True)
     except Exception as exc:
+        dump(args.out / "model/completion.json", dict(status="failed", stage=args.stage, error=str(exc)))
         (args.out / "blocked.md").write_text(f"# 运行暂停\n\n{type(exc).__name__}: {exc}\n\n未生成后续阶段结果。\n", encoding="utf-8")
         raise
 
@@ -52,9 +57,10 @@ def dispatch(args):
     base = args.remote_root.rstrip("/")
     if args.out.exists() and not args.resume:
         raise FileExistsError(f"Use --resume or a new destination: {args.out}")
-    for folder in ["Ques3", "Ques2"]:
-        for path in (ROOT / folder).glob("*.py"):
-            remote.file_upload(path, base + "/" + folder)
+    for path in (ROOT / "Ques3").glob("*.py"):
+        remote.file_upload(path, base + "/Ques3")
+    for name in ["model.py", "utils.py"]:
+        remote.file_upload(ROOT / "Ques2" / name, base + "/Ques2")
     if not args.resume:
         remote.file_upload(ROOT / "Ques1/src", base + "/Ques1", "src")
         remote.file_upload(ROOT / "Ques1/qa", base + "/Ques1", "qa")
@@ -77,6 +83,7 @@ def dispatch(args):
     remote.download(base + "/" + out_name, str(args.out.parent))
     if code:
         raise RuntimeError(f"Remote execution failed; diagnostics downloaded to {args.out}")
+    (args.out / "blocked.md").unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

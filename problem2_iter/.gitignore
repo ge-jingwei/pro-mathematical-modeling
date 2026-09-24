@@ -1,9 +1,0 @@
-# Preserve final source and reproducible experiment results.
-!README.md
-!report_iter.md
-!outputs/
-outputs/*
-!outputs/final/
-!outputs/final/**
-__pycache__/
-*.pyc

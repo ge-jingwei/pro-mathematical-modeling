@@ -5,13 +5,13 @@
 在项目根目录使用已有专用环境执行，默认将必要源码、问题一缓存及原始数据通过远程工具上传到一个新目录，再在服务器执行并下载结果：
 
 ```powershell
-& 'D:\Softwares\miniconda3\envs\kenny_ok\python.exe' -B problem2/run_problem2.py
+& 'D:\Softwares\miniconda3\envs\kenny_ok\python.exe' -B Ques2/run_problem2.py
 ```
 
 仅检查阶段一：
 
 ```powershell
-& 'D:\Softwares\miniconda3\envs\kenny_ok\python.exe' -B problem2/run_problem2.py --stage 1
+& 'D:\Softwares\miniconda3\envs\kenny_ok\python.exe' -B Ques2/run_problem2.py --stage 1
 ```
 
 参数 `--data` 指定四个原始文件所在目录，`--cache` 指定问题一结果目录，`--out` 指定尚不存在的本地下载目录。服务器地址及认证由既有远程工具配置或环境变量提供，本目录不保存密码。服务器解释器为既有专用环境；默认使用其绝对路径避免复合命令激活失败。默认新建时间戳目录，不覆盖已有产物。
@@ -19,7 +19,7 @@
 服务器直接运行：
 
 ```bash
-/home/gejw/.conda/envs/kenny_ok/bin/python -B problem2/run_problem2.py \
+/home/gejw/.conda/envs/kenny_ok/bin/python -B Ques2/run_problem2.py \
   --server --data /home/gejw/mm/q1_20260924/dataset \
   --cache /home/gejw/mm/q1_20260924/results \
   --font /home/gejw/mm/q1_20260924/assets/msyh.ttc \
@@ -46,3 +46,14 @@
 本次未达到可靠方向解码或全面良好拟合；报告保留失败与参数不稳定。没有基于测试结果改选模型、倒转标签或删掉误分类试次。三阶段报告均保存，任一步出现结构异常或数值发散即停止并留下错误说明。
 
 正式保存的片段、模型、特征和预测属于后续复现接口；失败试运行目录和临时脚本不属于交付，核验后清理。首次拟合采用三个固定随机初值，不做大规模搜索。
+
+## 源空间分类迭代
+
+分类迭代已合并到本目录，入口为 `Ques2/run_iter.py`，详见[迭代运行说明](README_iter.md)与[迭代交付摘要](report_iter.md)。原三阶段入口和算法保持不变。
+
+- `outputs/final/`：原问题二结果，也是迭代默认读取的片段缓存。
+- `outputs/iter_final/`：分类迭代正式结果，包含[完整实测报告](outputs/iter_final/report_iter.md)、模型、表格和图形。
+- `iter_utils.py`：迭代辅助代码；原 `utils.py` 保留，避免同名覆盖。
+- `merge_check.json`：目录迁移与完整性检查记录。
+
+迁移不重新训练、不改变实验指标。历史执行清单保留原路径和源码散列，记录当时真实运行状态，不以当前整合后源码冒充历史执行版本。

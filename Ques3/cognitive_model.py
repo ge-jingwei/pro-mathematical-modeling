@@ -1,5 +1,4 @@
 """Small reset-state model, train-only fitting, and honest held-out evaluation."""
-import json
 import numpy as np
 import pandas as pd
 import torch
@@ -152,7 +151,6 @@ def behavior_metrics(frame):
                 cms.append(dict(fold=name, actual=actual, predicted=predicted, count=int(np.sum((y == actual) & (pred == predicted))), classifier="threshold"))
         observed = x.loc[responded, "cue_to_response_latency"].to_numpy()
         predicted_time = x.loc[responded, "predicted_crossing_time"].to_numpy()
-        finite = np.isfinite(predicted_time)
         for method, estimate in [("threshold_crossed_only", predicted_time), ("training_median_baseline", x.loc[responded, "baseline_time"].to_numpy())]:
             valid = np.isfinite(estimate)
             error = estimate[valid] - observed[valid]
@@ -196,7 +194,6 @@ def run_models(trials, args, device):
         binary[full_pred != 0] = full_pred[full_pred != 0]
         weight, ridge, fit_samples = fit_mapping(y, baseline, memory, decision, observed, training, device)
         extended = baseline + np.einsum("nts,sc->nct", np.stack([memory, decision], axis=-1), weight)
-        fit_mask = observed & training[:, None]
         test_mask = observed & testing[:, None]
         ee = eeg_metrics(y, baseline, test_mask, fold, "q2_only") + eeg_metrics(y, extended, test_mask, fold, "q2_plus_states")
         for row in ee:
